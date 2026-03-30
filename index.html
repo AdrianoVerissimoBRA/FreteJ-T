@@ -236,15 +236,11 @@ body{background:var(--bg);background-image:radial-gradient(ellipse 80% 50% at 10
   </div>
   <div class="sim-wrap">
     <div class="spanel">
-      <div style="margin-bottom:12px">
-        <div class="fll" style="margin-bottom:4px">Valor Médio da Nota (R$)</div>
-        <input type="number" class="ctrl" id="sim-nota" value="120" min="0" step="10" style="width:130px" oninput="calcSim()">
-      </div>
-      <div class="fll" style="margin-bottom:8px" id="sim-lbl">Volume por Região (pedidos/mês)</div>
+      <div class="fll" style="margin-bottom:8px" id="sim-lbl">Qtd de Notas e Valor Médio por Região</div>
       <div class="scr" id="sim-inputs"></div>
       <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-pu" onclick="resetSim()">↺ Resetar</button>
-        <input class="ctrl" id="sim-total" type="number" placeholder="Total → distribuir" style="width:160px" oninput="setTotal(+this.value)">
+        <input class="ctrl" id="sim-total" type="number" placeholder="Total de notas → distribuir" style="width:190px" oninput="setTotal(+this.value)">
       </div>
     </div>
     <div>
@@ -495,31 +491,72 @@ function updRisk(n){
 // SIMULADOR
 // ============================================================
 var simScope='regiao', simVols={}, simNotas={}, simChart=null;
-function setScope(s){simScope=s;document.getElementById('tgl-reg').classList.toggle('on',s==='regiao');document.getElementById('tgl-uf').classList.toggle('on',s==='uf');document.getElementById('sim-lbl').textContent=s==='regiao'?'Volume por Região (pedidos/mês)':'Volume por Estado (pedidos/mês)';buildSimInputs();}
+function setScope(s){simScope=s;document.getElementById('tgl-reg').classList.toggle('on',s==='regiao');document.getElementById('tgl-uf').classList.toggle('on',s==='uf');buildSimInputs();}
 function buildSimInputs(){
-  const items=simScope==='regiao'?D.by_reg.map(r=>({key:r.Regiao,lbl:r.Regiao,mean:r.mean})):D.by_uf.map(u=>({key:u.UF,lbl:u.UF+' ('+u.Regiao.slice(0,3)+')',mean:u.mean}));
-  items.forEach(it=>{if(!(it.key in simVols))simVols[it.key]=simScope==='regiao'?500:100;});
-  document.getElementById('sim-inputs').innerHTML=
-    '<table class="stab"><thead><tr><th>'+(simScope==='regiao'?'Região':'UF')+'</th><th>Volume</th><th>Qtd</th><th>Nota R$</th></tr></thead><tbody>'+
-    items.map(it=>`<tr><td style="font-weight:700;font-size:11px;white-space:nowrap">${it.lbl}</td><td><input type="range" min="0" max="50000" step="100" value="${simVols[it.key]||0}" oninput="simVols['${it.key}']=+this.value;document.getElementById('vv-${it.key}').textContent=(+this.value).toLocaleString('pt-BR');calcSim()"></td><td><span class="vv" id="vv-${it.key}">${(simVols[it.key]||0).toLocaleString('pt-BR')}</span></td><td><input type="number" min="0" step="10" value="${simNotas[it.key]||0}" placeholder="R$" oninput="simNotas['${it.key}']=+this.value;calcSim()"></td></tr>`).join('')+
+  const items=simScope==='regiao'
+    ?D.by_reg.map(r=>({key:r.Regiao,lbl:r.Regiao,mean:r.mean}))
+    :D.by_uf.map(u=>({key:u.UF,lbl:u.UF+' ('+u.Regiao.slice(0,3)+')',mean:u.mean}));
+  items.forEach(it=>{
+    if(!(it.key in simVols))  simVols[it.key]  = simScope==='regiao'?500:100;
+    if(!(it.key in simNotas)) simNotas[it.key] = 120;
+  });
+  const scope = simScope==='regiao'?'Região':'UF';
+  document.getElementById('sim-lbl').textContent = scope+' · Qtd de Notas e Valor Médio';
+  document.getElementById('sim-inputs').innerHTML =
+    `<table class="stab">
+      <thead><tr>
+        <th>${scope}</th>
+        <th style="min-width:80px">Qtd Notas</th>
+        <th style="min-width:110px">Valor Médio (R$)</th>
+        <th style="min-width:90px;color:var(--pu3)">Frete Bruto Est.</th>
+      </tr></thead>
+      <tbody>`+
+    items.map(it=>`
+      <tr>
+        <td style="font-weight:700;font-size:11px;white-space:nowrap;padding-right:8px">${it.lbl}</td>
+        <td><input type="number" class="ctrl" min="0" step="50" value="${simVols[it.key]||0}"
+          style="width:80px;padding:4px 6px"
+          oninput="simVols['${it.key}']=+this.value;updRowEst('${it.key}',${it.mean});calcSim()"></td>
+        <td><input type="number" class="ctrl" min="0" step="10" value="${simNotas[it.key]||120}"
+          style="width:100px;padding:4px 6px"
+          oninput="simNotas['${it.key}']=+this.value;updRowEst('${it.key}',${it.mean});calcSim()"></td>
+        <td><span class="vv" id="vv-${it.key}" style="color:var(--pu3)">${fmtR((simVols[it.key]||0)*it.mean)}</span></td>
+      </tr>`).join('')+
     '</tbody></table>';
   calcSim();
 }
-function resetSim(){const items=simScope==='regiao'?D.by_reg.map(r=>r.Regiao):D.by_uf.map(u=>u.UF);items.forEach(k=>{simVols[k]=simScope==='regiao'?500:100;simNotas[k]=0;});buildSimInputs();}
+
+function updRowEst(key, meanFrete){
+  var el=document.getElementById('vv-'+key);
+  if(el) el.textContent=fmtR((simVols[key]||0)*meanFrete);
+}
+function resetSim(){const items=simScope==='regiao'?D.by_reg.map(r=>r.Regiao):D.by_uf.map(u=>u.UF);items.forEach(k=>{simVols[k]=simScope==='regiao'?500:100;simNotas[k]=120;});buildSimInputs();}
 function setTotal(t){if(!t||isNaN(t))return;const items=simScope==='regiao'?D.by_reg.map(r=>r.Regiao):D.by_uf.map(u=>u.UF);const per=Math.round(t/items.length/100)*100;items.forEach(k=>{simVols[k]=per;});buildSimInputs();}
 function calcSim(){
-  const gN=+(document.getElementById('sim-nota').value)||0;
   const items=simScope==='regiao'?D.by_reg.map(r=>({key:r.Regiao,lbl:r.Regiao,mean:r.mean})):D.by_uf.map(u=>({key:u.UF,lbl:u.UF,mean:u.mean}));
   let tM=0,tT=0,tV=0; const bk={};
-  items.forEach(it=>{const vol=simVols[it.key]||0,nota=(simNotas[it.key]||0)||gN;tV+=vol;tM+=it.mean*vol;const sub=it.mean+(nota>0?nota*.002:0)*2,tot=nota>0?sub/0.88:it.mean;tT+=tot*vol;bk[it.key]={m:it.mean*vol,t:tot*vol};});
-  const sB=tM/Math.max(tV,1),showTax=gN>0||Object.values(simNotas).some(v=>v>0);
-  const sSub=sB+(gN>0?gN*.004:0),sIcms=sSub*(12/88);
-  const taxH=gN>0?`<div class="tax-box"><div class="tax-t">📋 Breakdown por Envio · Nota ${fmtR(gN)}</div><div class="tax-r"><span class="tax-k">Frete Bruto médio</span><span class="tax-v">${fmtR(sB)}</span></div><div class="tax-r"><span class="tax-k">ADV 0,2%</span><span class="tax-v">+${fmtR(gN*.002)}</span></div><div class="tax-r"><span class="tax-k">GRIS 0,2%</span><span class="tax-v">+${fmtR(gN*.002)}</span></div><div class="tax-r"><span class="tax-k">Subtotal</span><span class="tax-v">${fmtR(sSub)}</span></div><div class="tax-r"><span class="tax-k">ICMS 12% (sub×12/88)</span><span class="tax-v">+${fmtR(sIcms)}</span></div><div class="tax-r" style="color:var(--neo)"><span class="tax-k">Total c/ Impostos</span><span class="tax-v">${fmtR(sSub+sIcms)}</span></div></div>`:'';
+  items.forEach(it=>{
+    const vol=simVols[it.key]||0;
+    const nota=simNotas[it.key]||120;   // valor médio da nota por área
+    tV+=vol; tM+=it.mean*vol;
+    const adv=nota*.002, gris=nota*.002;
+    const sub=it.mean+adv+gris;
+    const tot=sub/0.88;
+    tT+=tot*vol;
+    bk[it.key]={m:it.mean*vol,t:tot*vol};
+  });
+  // Nota média ponderada para o breakdown de referência
+  const notaMediaRef=Object.keys(simVols).reduce((acc,k)=>{const v=simVols[k]||0;return acc+(simNotas[k]||120)*v;},0)/Math.max(tV,1);
+  const sB=tM/Math.max(tV,1), notaRef=notaMediaRef||120;
+  const sAdv=notaRef*.002, sGris=notaRef*.002;
+  const sSub=sB+sAdv+sGris, sIcms=sSub*(12/88);
+  const showTax=Object.values(simNotas).some(v=>v>0)||true;
+  const taxH=`<div class="tax-box"><div class="tax-t">📋 Breakdown por Envio · Nota média ponderada ${fmtR(notaRef)}</div><div class="tax-r"><span class="tax-k">Frete Bruto médio</span><span class="tax-v">${fmtR(sB)}</span></div><div class="tax-r"><span class="tax-k">ADV 0,2%</span><span class="tax-v">+${fmtR(sAdv)}</span></div><div class="tax-r"><span class="tax-k">GRIS 0,2%</span><span class="tax-v">+${fmtR(sGris)}</span></div><div class="tax-r"><span class="tax-k">Subtotal</span><span class="tax-v">${fmtR(sSub)}</span></div><div class="tax-r"><span class="tax-k">ICMS 12% (sub×12/88)</span><span class="tax-v">+${fmtR(sIcms)}</span></div><div class="tax-r" style="color:var(--neo)"><span class="tax-k">Total c/ Impostos (por envio)</span><span class="tax-v">${fmtR(sSub+sIcms)}</span></div></div>`;
   document.getElementById('sim-result').innerHTML=
     `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:10px">
-      <div class="rc hl"><div class="rl">⭐ Frete Bruto Total</div><div class="rv" style="color:var(--pu3)">${fmtR(tM)}</div><div class="rs">${tV.toLocaleString('pt-BR')} pedidos</div></div>
-      <div class="rc"><div class="rl">Por Envio (média)</div><div class="rv" style="font-size:22px;color:var(--teal)">${fmtR(sB)}</div><div class="rs">bruto médio</div></div>
-      <div class="rc">${showTax?`<div class="rl">Total c/ Impostos</div><div class="rv" style="font-size:20px;color:var(--neo)">${fmtR(tT)}</div><div class="rs">${fmtR(tT/Math.max(tV,1))}/envio</div>`:'<div class="rl">Informe a Nota</div><div style="font-size:11px;color:var(--mu);margin-top:8px">Preencha o valor da nota para calcular impostos</div>'}</div>
+      <div class="rc hl"><div class="rl">⭐ Frete Bruto Total</div><div class="rv" style="color:var(--pu3)">${fmtR(tM)}</div><div class="rs">${tV.toLocaleString('pt-BR')} notas</div></div>
+      <div class="rc"><div class="rl">Frete Bruto / Envio</div><div class="rv" style="font-size:22px;color:var(--teal)">${fmtR(sB)}</div><div class="rs">média ponderada</div></div>
+      <div class="rc"><div class="rl">Total c/ Impostos</div><div class="rv" style="font-size:20px;color:var(--neo)">${fmtR(tT)}</div><div class="rs">${fmtR(tT/Math.max(tV,1))}/envio c/ ADV+GRIS+ICMS</div></div>
     </div>${taxH}`;
   const rl=Object.keys(bk);
   if(simChart)simChart.destroy();
